@@ -15,7 +15,6 @@ This repository contains an Azure DevOps pipeline that automates OWASP ZAP secur
 - [Understanding the Pipeline Steps](#understanding-the-pipeline-steps)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
-- [License](#license)
 
 ---
 
