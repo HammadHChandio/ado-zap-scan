@@ -50,8 +50,8 @@ stages:
 
           # Pull OWASP ZAP Image and Push to ACR
           - script: |
-              docker pull owasp/zap2docker-weekly
-              docker tag owasp/zap2docker-weekly $(ACR_NAME).azurecr.io/$(ACR_IMAGE):$(ACR_IMAGE_TAG)
+              docker pull ghcr.io/zaproxy/zaproxy:stable
+              docker tag ghcr.io/zaproxy/zaproxy:stable $(ACR_NAME).azurecr.io/$(ACR_IMAGE):$(ACR_IMAGE_TAG)
               docker push $(ACR_NAME).azurecr.io/$(ACR_IMAGE):$(ACR_IMAGE_TAG)
             displayName: 'Pull OWASP ZAP image and push to ACR'
 
