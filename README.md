@@ -236,41 +236,6 @@ Exception calling “Load” with “1” argument(s): “Could not find a part 
 
 ## Contributing
 
-Contributions are welcome! If you'd like to improve this pipeline or fix any issues, please follow these steps:
-
-1. Fork the repository.
-2. Create a new branch:
- ```bash
- git checkout -b feature/YourFeature
-```
-- **Solution**:
-- Ensure the `OWASPToNUnit3.xslt` file is in the correct path (`$(System.DefaultWorkingDirectory)/OWASPToNUnit3.xslt`).
-- Confirm that the file is included in the repository and checked out during the pipeline.
-
-#### 2. **SecurityScan Stage Skipped**
-
-- **Cause**:
-- Implicit dependencies causing the stage to be skipped when the previous stage is skipped.
-- **Solution**:
-- Add `dependsOn: []` to the `SecurityScan` stage to ensure it runs independently.
-
-#### 3. **Image Not Found in ACR**
-
-- **Cause**:
-- The OWASP ZAP image does not exist in ACR when `updateImage` is `false`.
-- **Solution**:
-- Run the pipeline once with `updateImage` set to `true` to populate ACR with the image.
-- Alternatively, add a check in the pipeline to verify the image exists before proceeding.
-
-#### 4. **Container Creation Failures**
-
-- **Solution**:
-- Ensure all variables in the variable group are correctly configured.
-- Verify that the Azure service connection has the necessary permissions.
-
----
-## Contributing
-
 Contributions are welcome! If you'd like to improve this pipeline or fix any issues, Happy Zapping ⚡️
 
 ---
