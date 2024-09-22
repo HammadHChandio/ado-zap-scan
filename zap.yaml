@@ -1,0 +1,216 @@
+trigger:
+  - none
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+parameters:
+  - name: targetScan
+    type: string
+    default: 'https://juice-shop.herokuapp.com/'
+    displayName: 'Target Site URL for OWASP ZAP Scan'
+
+  - name: scanType
+    type: string
+    default: 'baseline'
+    values:
+      - 'baseline'
+      - 'full'
+    displayName: 'Type of OWASP ZAP Scan'
+
+  - name: updateImage
+    type: boolean
+    default: false
+    displayName: 'Update OWASP ZAP Image?'
+
+variables:
+  - group: zap-group
+  - name: TARGET_SCAN
+    value: ${{ parameters.targetScan }}
+  - name: SCAN_TYPE
+    value: ${{ parameters.scanType }}
+
+stages:
+  - stage: PrepareACR
+    displayName: 'Prepare ACR'
+    condition: eq('${{ parameters.updateImage }}', true)
+    jobs:
+      - job: PushToACR
+        displayName: 'Push OWASP ZAP Image to ACR'
+        steps:
+          # Login to ACR
+          - task: AzureCLI@2
+            displayName: 'Login to ACR'
+            inputs:
+              azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                az acr login --name $(ACR_NAME)
+
+          # Pull OWASP ZAP Image and Push to ACR
+          - script: |
+              docker pull owasp/zap2docker-weekly
+              docker tag owasp/zap2docker-weekly $(ACR_NAME).azurecr.io/$(ACR_IMAGE):$(ACR_IMAGE_TAG)
+              docker push $(ACR_NAME).azurecr.io/$(ACR_IMAGE):$(ACR_IMAGE_TAG)
+            displayName: 'Pull OWASP ZAP image and push to ACR'
+
+  - stage: SecurityScan
+    displayName: 'Security Scan'
+    dependsOn: []
+    jobs:
+      - job: OWASPScan
+        displayName: 'OWASP ZAP Security Scan'
+        steps:
+          - checkout: self
+
+          # Create Resource Group
+          - task: AzureCLI@2
+            displayName: 'Create Resource Group'
+            inputs:
+              azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                az group create -l $(ACI_LOCATION) -n $(ACI_RESOURCE_GROUP)
+
+          # Create Storage Account and File Share
+          - task: AzureCLI@2
+            displayName: 'Create Storage Account and File Share'
+            inputs:
+              azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                az storage account create -g $(ACI_RESOURCE_GROUP) -n $(ACI_STORAGE_ACCOUNT_NAME) -l $(ACI_LOCATION) --sku Standard_LRS
+                az storage share create -n $(ACI_SHARE_NAME) --account-name $(ACI_STORAGE_ACCOUNT_NAME)
+
+          # Get Storage Account Key and Create OWASP Container from ACR
+          - task: AzureCLI@2
+            displayName: 'Create OWASP ZAP Container from ACR and Start Scan'
+            inputs:
+              azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                echo "Target Scan URL is: $TARGET_SCAN"
+                echo "Scan Type: $SCAN_TYPE"
+
+                STORAGE_KEY=$(az storage account keys list -g $(ACI_RESOURCE_GROUP) --account-name $(ACI_STORAGE_ACCOUNT_NAME) --query "[0].value" --output tsv)
+
+                # Set the scan command based on the scan type
+                if [ "$SCAN_TYPE" = "baseline" ]; then
+                  SCAN_COMMAND="zap-baseline.py -t $TARGET_SCAN -x OWASP-ZAP-Report.xml"
+                elif [ "$SCAN_TYPE" = "full" ]; then
+                  SCAN_COMMAND="zap-full-scan.py -t $TARGET_SCAN -x OWASP-ZAP-Report.xml"
+                else
+                  echo "Invalid scan type specified: $SCAN_TYPE"
+                  exit 1
+                fi
+
+                echo "Using scan command: $SCAN_COMMAND"
+
+                az container create -g $(ACI_RESOURCE_GROUP) -n $(ACI_INSTANCE_NAME) \
+                  --image $(ACR_NAME).azurecr.io/$(ACR_IMAGE):$(ACR_IMAGE_TAG) \
+                  --cpu 2 \
+                  --memory 4 \
+                  --azure-file-volume-account-name $(ACI_STORAGE_ACCOUNT_NAME) \
+                  --azure-file-volume-account-key $STORAGE_KEY \
+                  --azure-file-volume-share-name $(ACI_SHARE_NAME) \
+                  --azure-file-volume-mount-path /zap/wrk/ \
+                  --registry-login-server $(ACR_NAME).azurecr.io \
+                  --registry-username $(ACR_NAME) \
+                  --registry-password $(ACR_PASSWORD) \
+                  --command-line "$SCAN_COMMAND" \
+                  --restart-policy Never
+            env:
+              TARGET_SCAN: $(TARGET_SCAN)
+              SCAN_TYPE: $(SCAN_TYPE)
+
+          # Wait for OWASP ZAP Scan to Complete
+          - task: AzureCLI@2
+            displayName: 'Wait for OWASP ZAP Scan to Complete'
+            inputs:
+              azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                echo "Waiting for OWASP ZAP scan to complete..."
+
+                # Set timeout based on scan type
+                if [ "$SCAN_TYPE" = "baseline" ]; then
+                  TIMEOUT=1800  # 30 minutes
+                elif [ "$SCAN_TYPE" = "full" ]; then
+                  TIMEOUT=7200  # 2 hours
+                else
+                  echo "Invalid scan type specified: $SCAN_TYPE"
+                  exit 1
+                fi
+
+                # Wait for the container to reach the 'Terminated' state
+                az container wait \
+                  -g $(ACI_RESOURCE_GROUP) \
+                  -n $(ACI_INSTANCE_NAME) \
+                  --custom "instanceView.state=='Terminated'" \
+                  --interval 30 \
+                  --timeout $TIMEOUT
+
+                # Check the exit code
+                EXIT_CODE=$(az container show \
+                  -g $(ACI_RESOURCE_GROUP) \
+                  -n $(ACI_INSTANCE_NAME) \
+                  --query "containers[0].instanceView.currentState.exitCode" \
+                  -o tsv)
+                echo "Scan completed with exit code $EXIT_CODE"
+
+                if [ "$EXIT_CODE" -ne 0 ]; then
+                  echo "Scan failed. Fetching container logs..."
+                  az container logs -g $(ACI_RESOURCE_GROUP) -n $(ACI_INSTANCE_NAME)
+                  exit 1
+                fi
+            env:
+              SCAN_TYPE: $(SCAN_TYPE)
+
+          # Download Scan Report
+          - task: AzureCLI@2
+            displayName: 'Download OWASP ZAP Report'
+            inputs:
+              azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                STORAGE_KEY=$(az storage account keys list -g $(ACI_RESOURCE_GROUP) --account-name $(ACI_STORAGE_ACCOUNT_NAME) --query "[0].value" --output tsv)
+                az storage file download --account-name $(ACI_STORAGE_ACCOUNT_NAME) --account-key $STORAGE_KEY -s $(ACI_SHARE_NAME) -p OWASP-ZAP-Report.xml \
+                  --dest $(System.DefaultWorkingDirectory)/OWASP-ZAP-Report.xml
+
+          # Convert Report to NUnit Format
+          - task: PowerShell@2
+            displayName: 'Convert OWASP ZAP Report to NUnit Format'
+            inputs:
+              targetType: 'inline'
+              script: |
+                $XslPath = "$(System.DefaultWorkingDirectory)/OWASPToNUnit3.xslt"
+                $XmlInputPath = "$(System.DefaultWorkingDirectory)/OWASP-ZAP-Report.xml"
+                $XmlOutputPath = "$(System.DefaultWorkingDirectory)/Converted-OWASP-ZAP-Report.xml"
+                $XslTransform = New-Object System.Xml.Xsl.XslCompiledTransform
+                $XslTransform.Load($XslPath)
+                $XslTransform.Transform($XmlInputPath, $XmlOutputPath)
+
+          # Publish Test Results
+          - task: PublishTestResults@2
+            displayName: 'Publish Test Results'
+            inputs:
+              testResultsFormat: 'NUnit'
+              testResultsFiles: '$(System.DefaultWorkingDirectory)/Converted-OWASP-ZAP-Report.xml'
+              searchFolder: '$(System.DefaultWorkingDirectory)'
+              testRunTitle: 'OWASP Tests'
+
+          # Destroy OWASP Container
+          - task: AzureCLI@2
+            displayName: 'Destroy OWASP ZAP Container'
+            inputs:
+              azureSubscription: '$(AZURE_SERVICE_CONNECTION)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                az container delete -g $(ACI_RESOURCE_GROUP) -n $(ACI_INSTANCE_NAME) --yes
