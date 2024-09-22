@@ -77,7 +77,7 @@ The pipeline consists of two main stages:
 Clone this repository to your local machine:
 
 ```bash
-git clone https://github.com/your-username/your-repo.git
+https://github.com/HammadHChandio/ado-zap-scan.git
 ```
 ## Configure the Variable Group in Azure DevOps
 
