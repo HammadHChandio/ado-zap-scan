@@ -1,0 +1,415 @@
+<title>Secure AKS — Architecture Wireframe</title>
+<style>
+  :root {
+    --paper: #eef2f8;
+    --panel: #ffffff;
+    --ink: #0f1b2d;
+    --ink-soft: #45566e;
+    --ink-faint: #7a8aa3;
+    --line: #c3cee0;
+    --line-strong: #8698b7;
+    --grid: rgba(47, 111, 237, 0.06);
+    --azure: #2f6fed;
+    --azure-soft: rgba(47, 111, 237, 0.10);
+    --teal: #12876a;
+    --teal-soft: rgba(18, 135, 106, 0.12);
+    --amber: #a8681a;
+    --amber-soft: rgba(168, 104, 26, 0.12);
+    --zone: rgba(47, 111, 237, 0.035);
+    --shadow: 0 1px 2px rgba(15, 27, 45, 0.06), 0 8px 24px rgba(15, 27, 45, 0.05);
+    --mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0a1220;
+      --panel: #101c30;
+      --ink: #e8eef8;
+      --ink-soft: #a4b3cc;
+      --ink-faint: #6b7d9a;
+      --line: #26374f;
+      --line-strong: #3c5175;
+      --grid: rgba(96, 148, 255, 0.07);
+      --azure: #6ea0ff;
+      --azure-soft: rgba(96, 148, 255, 0.14);
+      --teal: #45c8a2;
+      --teal-soft: rgba(69, 200, 162, 0.15);
+      --amber: #e0a75a;
+      --amber-soft: rgba(224, 167, 90, 0.15);
+      --zone: rgba(96, 148, 255, 0.05);
+      --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 10px 30px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="light"] {
+    --paper: #eef2f8; --panel: #ffffff; --ink: #0f1b2d; --ink-soft: #45566e;
+    --ink-faint: #7a8aa3; --line: #c3cee0; --line-strong: #8698b7;
+    --grid: rgba(47,111,237,0.06); --azure: #2f6fed; --azure-soft: rgba(47,111,237,0.10);
+    --teal: #12876a; --teal-soft: rgba(18,135,106,0.12); --amber: #a8681a;
+    --amber-soft: rgba(168,104,26,0.12); --zone: rgba(47,111,237,0.035);
+    --shadow: 0 1px 2px rgba(15,27,45,0.06), 0 8px 24px rgba(15,27,45,0.05);
+  }
+  :root[data-theme="dark"] {
+    --paper: #0a1220; --panel: #101c30; --ink: #e8eef8; --ink-soft: #a4b3cc;
+    --ink-faint: #6b7d9a; --line: #26374f; --line-strong: #3c5175;
+    --grid: rgba(96,148,255,0.07); --azure: #6ea0ff; --azure-soft: rgba(96,148,255,0.14);
+    --teal: #45c8a2; --teal-soft: rgba(69,200,162,0.15); --amber: #e0a75a;
+    --amber-soft: rgba(224,167,90,0.15); --zone: rgba(96,148,255,0.05);
+    --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 10px 30px rgba(0,0,0,0.35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: var(--sans);
+    color: var(--ink);
+    background-color: var(--paper);
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 28px 28px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 40px 24px 72px; }
+
+  /* ---- Header ---- */
+  header { margin-bottom: 28px; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em;
+    text-transform: uppercase; color: var(--azure); margin: 0 0 10px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .eyebrow::after { content: ""; height: 1px; flex: 1; background: var(--line); }
+  h1 {
+    font-size: clamp(28px, 5vw, 44px); line-height: 1.05; margin: 0 0 12px;
+    letter-spacing: -0.02em; text-wrap: balance; font-weight: 680;
+  }
+  h1 .thin { color: var(--ink-faint); font-weight: 400; }
+  .lede { margin: 0; max-width: 64ch; color: var(--ink-soft); font-size: 16px; }
+  .meta {
+    display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 18px;
+    font-family: var(--mono); font-size: 12px; color: var(--ink-faint);
+  }
+  .meta b { color: var(--ink-soft); font-weight: 500; }
+
+  /* ---- Legend ---- */
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 18px; align-items: center;
+    padding: 12px 16px; margin: 24px 0 28px;
+    border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+    font-size: 12.5px; color: var(--ink-soft); box-shadow: var(--shadow);
+  }
+  .legend .li { display: flex; align-items: center; gap: 8px; }
+  .swatch-zone { width: 24px; height: 15px; border: 1.5px dashed var(--line-strong); border-radius: 3px; }
+  .swatch-flow { width: 24px; height: 0; border-top: 2px solid var(--azure); }
+  .chip-mini {
+    font-family: var(--mono); font-size: 10px; padding: 2px 7px; border-radius: 20px;
+    background: var(--teal-soft); color: var(--teal); border: 1px solid transparent;
+    display: inline-flex; align-items: center; gap: 5px; font-weight: 600;
+  }
+  .chip-mini::before { content: "✓"; }
+
+  /* ---- Diagram scaffold ---- */
+  .board { overflow-x: auto; padding-bottom: 6px; }
+  .diagram { min-width: 720px; display: flex; flex-direction: column; gap: 0; }
+
+  .layer-label {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--ink-faint); margin: 0 0 10px 2px;
+  }
+
+  .node {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 16px; box-shadow: var(--shadow); position: relative;
+  }
+  .node h3 {
+    margin: 0 0 3px; font-size: 14.5px; font-weight: 620; letter-spacing: -0.01em;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .node .sub { margin: 0; font-size: 12px; color: var(--ink-faint); font-family: var(--mono); }
+  .node .desc { margin: 8px 0 0; font-size: 12.5px; color: var(--ink-soft); }
+  .tag {
+    font-family: var(--mono); font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em;
+    padding: 2px 7px; border-radius: 5px; text-transform: uppercase;
+    background: var(--azure-soft); color: var(--azure);
+  }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .chip {
+    font-family: var(--mono); font-size: 10.5px; padding: 3px 8px; border-radius: 20px;
+    background: var(--teal-soft); color: var(--teal); font-weight: 600;
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .chip::before { content: "✓"; font-size: 10px; }
+
+  /* Trust / boundary zones */
+  .zone {
+    border: 1.5px dashed var(--line-strong); border-radius: 14px;
+    padding: 16px; background: var(--zone); position: relative; margin-top: 14px;
+  }
+  .zone > .zlabel {
+    position: absolute; top: -10px; left: 16px; background: var(--paper);
+    padding: 0 10px; font-family: var(--mono); font-size: 11px; font-weight: 600;
+    letter-spacing: 0.04em; color: var(--ink-soft);
+    display: inline-flex; align-items: center; gap: 7px;
+  }
+  .zone.vnet > .zlabel { color: var(--teal); }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+
+  /* connector rail */
+  .rail { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 0; }
+  .rail .line { width: 2px; height: 20px; background: linear-gradient(var(--azure), var(--azure)); opacity: 0.5; }
+  .rail .flow-label {
+    font-family: var(--mono); font-size: 10.5px; color: var(--azure);
+    background: var(--azure-soft); padding: 3px 10px; border-radius: 20px; font-weight: 600;
+  }
+  .rail .arrow { color: var(--azure); font-size: 13px; line-height: 1; opacity: 0.7; }
+
+  .icon {
+    width: 22px; height: 22px; border-radius: 6px; flex: none;
+    display: grid; place-items: center; font-size: 12px; font-weight: 800;
+    background: var(--azure-soft); color: var(--azure); font-family: var(--mono);
+  }
+  .icon.teal { background: var(--teal-soft); color: var(--teal); }
+  .icon.amber { background: var(--amber-soft); color: var(--amber); }
+
+  /* ---- Controls mapping ---- */
+  .section-head {
+    display: flex; align-items: baseline; gap: 12px; margin: 52px 0 18px;
+  }
+  .section-head h2 { margin: 0; font-size: 20px; letter-spacing: -0.01em; font-weight: 640; }
+  .section-head .n { font-family: var(--mono); font-size: 12px; color: var(--azure); }
+  .section-head .rule { flex: 1; height: 1px; background: var(--line); }
+
+  .controls { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .ctrl {
+    border: 1px solid var(--line); border-left: 3px solid var(--teal); border-radius: 8px;
+    background: var(--panel); padding: 12px 14px; box-shadow: var(--shadow);
+  }
+  .ctrl h4 { margin: 0 0 4px; font-size: 13px; font-weight: 620; }
+  .ctrl p { margin: 0; font-size: 12.5px; color: var(--ink-soft); }
+  .ctrl .k { font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint); display: block; margin-top: 6px; }
+
+  .note {
+    margin-top: 22px; border: 1px solid var(--line); border-left: 3px solid var(--amber);
+    background: var(--amber-soft); border-radius: 8px; padding: 14px 16px;
+  }
+  .note h4 { margin: 0 0 6px; font-size: 13px; color: var(--amber); display: flex; gap: 8px; align-items: center; }
+  .note ul { margin: 0; padding-left: 18px; font-size: 12.5px; color: var(--ink-soft); }
+  .note li { margin: 3px 0; }
+
+  footer {
+    margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--line);
+    font-family: var(--mono); font-size: 11.5px; color: var(--ink-faint);
+    display: flex; flex-wrap: wrap; gap: 6px 18px; justify-content: space-between;
+  }
+
+  @media (max-width: 640px) {
+    .controls { grid-template-columns: 1fr; }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Azure Kubernetes Service &nbsp;·&nbsp; Proof of Concept</p>
+    <h1>Secure AKS <span class="thin">— hardened cluster blueprint</span></h1>
+    <p class="lede">A private, Entra-governed AKS environment provisioned entirely as Terraform.
+      Every box below maps to a Microsoft AKS security best practice and to a resource in the
+      <code>secure-aks/terraform</code> module.</p>
+    <div class="meta">
+      <span><b>IaC</b> · Terraform azurerm ~&gt; 4.0</span>
+      <span><b>Region</b> · West Europe</span>
+      <span><b>API server</b> · Private</span>
+      <span><b>Network</b> · Azure CNI Overlay + Cilium</span>
+    </div>
+  </header>
+
+  <div class="legend" role="list">
+    <span class="li"><span class="swatch-zone"></span> Trust / network boundary</span>
+    <span class="li"><span class="swatch-flow"></span> Authenticated flow</span>
+    <span class="li"><span class="chip-mini">control enabled</span></span>
+    <span class="li" style="font-family:var(--mono);font-size:11px;color:var(--ink-faint)">Scroll diagram sideways on narrow screens →</span>
+  </div>
+
+  <div class="board">
+    <div class="diagram">
+
+      <!-- Layer 1: Identity & operators -->
+      <p class="layer-label">01 · Identity &amp; operators</p>
+      <div class="grid3">
+        <div class="node">
+          <h3><span class="icon">ID</span> Microsoft Entra ID</h3>
+          <p class="sub">admin group object IDs</p>
+          <p class="desc">Cluster-admin is granted only to Entra ID groups. There is no static admin kubeconfig.</p>
+        </div>
+        <div class="node">
+          <h3><span class="icon">WI</span> Workload Identity</h3>
+          <p class="sub">OIDC issuer · federated</p>
+          <p class="desc">Pods exchange a projected SA token for an Entra token — no long-lived cloud credentials.</p>
+        </div>
+        <div class="node">
+          <h3><span class="icon">Op</span> Operators &amp; CI</h3>
+          <p class="sub">az login · OIDC pipeline</p>
+          <p class="desc">Authenticate to Entra ID; authorized by Azure RBAC before touching the API server.</p>
+        </div>
+      </div>
+
+      <div class="rail">
+        <span class="flow-label">Entra ID token → Azure RBAC authorization</span>
+        <span class="line"></span><span class="arrow">▼</span>
+      </div>
+
+      <!-- Layer 2: Azure subscription boundary -->
+      <p class="layer-label">02 · Azure subscription → resource group</p>
+      <div class="zone">
+        <span class="zlabel"><span class="icon" style="width:16px;height:16px;font-size:9px">AZ</span> Subscription boundary · one resource group</span>
+
+        <!-- Control plane -->
+        <div class="node" style="border-left:3px solid var(--azure)">
+          <h3><span class="icon">CP</span> AKS control plane <span class="tag">private</span></h3>
+          <p class="sub">kube-apiserver · no public endpoint · sku_tier = Standard</p>
+          <div class="chips">
+            <span class="chip">Entra ID + Azure RBAC</span>
+            <span class="chip">local accounts disabled</span>
+            <span class="chip">Azure Policy (Gatekeeper)</span>
+            <span class="chip">Defender for Containers</span>
+            <span class="chip">auto-upgrade · stable</span>
+          </div>
+        </div>
+
+        <!-- VNet zone -->
+        <div class="zone vnet">
+          <span class="zlabel"><span class="icon teal" style="width:16px;height:16px;font-size:9px">VN</span> Spoke VNet · 10.10.0.0/16 · NSG on node subnet</span>
+
+          <div class="grid2">
+            <!-- node subnet -->
+            <div class="node" style="border-color:var(--line-strong)">
+              <h3><span class="icon teal">N</span> snet-aks-nodes</h3>
+              <p class="sub">10.10.1.0/24</p>
+              <div style="display:flex;flex-direction:column;gap:10px;margin-top:12px">
+                <div class="node" style="box-shadow:none">
+                  <h3 style="font-size:13px"><span class="icon teal">S</span> System node pool</h3>
+                  <p class="sub">AzureLinux · zones 1–3 · CriticalAddonsOnly</p>
+                  <div class="chips"><span class="chip">host encryption</span><span class="chip">autoscale 2–4</span></div>
+                </div>
+                <div class="node" style="box-shadow:none">
+                  <h3 style="font-size:13px"><span class="icon teal">U</span> User node pool</h3>
+                  <p class="sub">AzureLinux · zones 1–3 · workloads</p>
+                  <div class="chips"><span class="chip">host encryption</span><span class="chip">autoscale 2–6</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- private endpoints subnet -->
+            <div class="node" style="border-color:var(--line-strong)">
+              <h3><span class="icon teal">PE</span> snet-private-endpoints</h3>
+              <p class="sub">10.10.2.0/24</p>
+              <div style="display:flex;flex-direction:column;gap:10px;margin-top:12px">
+                <div class="node" style="box-shadow:none">
+                  <h3 style="font-size:13px"><span class="icon">→</span> Private Endpoint · ACR</h3>
+                  <p class="sub">privatelink.azurecr.io</p>
+                </div>
+                <div class="node" style="box-shadow:none">
+                  <h3 style="font-size:13px"><span class="icon">→</span> Private Endpoint · Key Vault</h3>
+                  <p class="sub">privatelink.vaultcore.azure.net</p>
+                </div>
+                <p class="desc" style="margin-top:2px">Data-plane traffic to registry &amp; secrets never leaves the VNet.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="rail">
+          <span class="flow-label">AcrPull (kubelet MI) &nbsp;·&nbsp; CSI secret mount (workload identity)</span>
+          <span class="line"></span><span class="arrow">▼</span>
+        </div>
+
+        <!-- Shared platform services -->
+        <p class="layer-label" style="margin-top:2px">03 · Platform services (private)</p>
+        <div class="grid3">
+          <div class="node">
+            <h3><span class="icon">CR</span> Container Registry</h3>
+            <p class="sub">Premium</p>
+            <div class="chips"><span class="chip">admin off</span><span class="chip">public off</span></div>
+          </div>
+          <div class="node">
+            <h3><span class="icon">KV</span> Key Vault</h3>
+            <p class="sub">RBAC authorization</p>
+            <div class="chips"><span class="chip">purge protect</span><span class="chip">public off</span></div>
+          </div>
+          <div class="node">
+            <h3><span class="icon amber">LA</span> Log Analytics</h3>
+            <p class="sub">Container Insights</p>
+            <div class="chips"><span class="chip">audit logs</span><span class="chip">Defender sink</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Controls mapping -->
+  <div class="section-head">
+    <span class="n">04</span>
+    <h2>Controls mapped to AKS best practices</h2>
+    <span class="rule"></span>
+  </div>
+  <div class="controls">
+    <div class="ctrl">
+      <h4>Identity without secrets</h4>
+      <p>User-assigned managed identity for the control plane; Workload Identity + OIDC for pods.</p>
+      <span class="k">identity{} · oidc_issuer_enabled · workload_identity_enabled</span>
+    </div>
+    <div class="ctrl">
+      <h4>Entra ID + Azure RBAC</h4>
+      <p>Cluster access via Entra groups only; local Kubernetes accounts disabled.</p>
+      <span class="k">azure_rbac_enabled · local_account_disabled = true</span>
+    </div>
+    <div class="ctrl">
+      <h4>Private control plane</h4>
+      <p>API server has no public endpoint; reach it via jumpbox or <code>az aks command invoke</code>.</p>
+      <span class="k">private_cluster_enabled = true</span>
+    </div>
+    <div class="ctrl">
+      <h4>Network policy dataplane</h4>
+      <p>Azure CNI Overlay with the Cilium dataplane, ready for default-deny policies.</p>
+      <span class="k">network_plugin_mode = overlay · network_policy = cilium</span>
+    </div>
+    <div class="ctrl">
+      <h4>Private registry &amp; secrets</h4>
+      <p>ACR &amp; Key Vault public access off, private endpoints, RBAC pulls &amp; reads.</p>
+      <span class="k">public_network_access_enabled = false · AcrPull</span>
+    </div>
+    <div class="ctrl">
+      <h4>Governance &amp; threat detection</h4>
+      <p>Azure Policy (Gatekeeper) guardrails and Microsoft Defender for Containers.</p>
+      <span class="k">azure_policy_enabled · microsoft_defender{}</span>
+    </div>
+    <div class="ctrl">
+      <h4>Node hardening</h4>
+      <p>Azure Linux OS, encryption-at-host, zonal spread, system/user pool isolation.</p>
+      <span class="k">os_sku = AzureLinux · host_encryption_enabled</span>
+    </div>
+    <div class="ctrl">
+      <h4>Patching &amp; hygiene</h4>
+      <p>Auto-upgrade (stable) + node-image upgrades in maintenance windows; Image Cleaner.</p>
+      <span class="k">automatic_upgrade_channel · image_cleaner_enabled</span>
+    </div>
+  </div>
+
+  <div class="note">
+    <h4>△ Hardening beyond this POC</h4>
+    <ul>
+      <li>Controlled egress: Azure Firewall + User-Defined Routing (or NAT Gateway) instead of load-balancer egress.</li>
+      <li>Hub VNet with Bastion / jumpbox for private API access; default-deny CiliumNetworkPolicy per namespace.</li>
+      <li>Pod Security Admission (restricted) and the pod-security-baseline Azure Policy initiative.</li>
+      <li>Customer-managed keys (CMK) for disks, ACR &amp; Key Vault; Private Link for Log Analytics (AMPLS).</li>
+    </ul>
+  </div>
+
+  <footer>
+    <span>secure-aks/terraform · azurerm ~&gt; 4.0</span>
+    <span>Design blueprint · not to scale</span>
+  </footer>
+</div>
